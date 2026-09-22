@@ -1,0 +1,16 @@
+.dislike-button { border:1px solid #d9e1ed; color:#68758b; border-radius:7px; background:#fff; padding:10px 15px; font-size:13px; }
+.comments-section { margin-top:45px; }
+.comments-heading { display:flex; align-items:baseline; justify-content:space-between; border-bottom:1px solid #e4e9e4; padding-bottom:16px; }
+.comments-heading h2 { margin:0; font-size:20px; }
+.comments-heading span,.comment-login { color:#7d8b84; font-size:12px; }
+.comment-form { margin-top:20px; align-items:flex-end; }
+.comment-form textarea { min-height:80px; }
+.comment-item { display:flex; gap:12px; padding:20px 0; border-bottom:1px solid #e4e9e4; }
+.comment-content { flex:1; min-width:0; }
+.comment-meta { display:flex; align-items:center; gap:9px; font-size:12px; }
+.comment-meta span { color:#9ba69f; font-size:11px; }
+.comment-actions { margin-left:auto; display:flex; gap:8px; }
+.comment-actions button { border:0; background:none; color:#2f6b4f; font-size:11px; }
+.comment-content p { margin:9px 0 0; color:#536158; font-size:13px; line-height:1.7; white-space:pre-line; }
+.comment-edit-actions { display:flex; gap:7px; margin-top:8px; }
+.comments-admin-panel { margin-top:22px; }
