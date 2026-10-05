@@ -3,7 +3,7 @@ import './App.css'
 import './comments.css'
 import AdminCommentsPanel from './AdminCommentsPanel'
 
-const API_URL = `${window.location.protocol}//${window.location.hostname}:3000/api`
+const API_URL = import.meta.env.VITE_API_URL || 'https://aftnadzpsxzzujfyblsm.supabase.co/functions/v1/api'
 const move = (p) => window.history.pushState({}, '', p)
 const defaultUser = { name: '', email: '', bio: '오늘도 온마을에서 좋은 하루 보내세요.' }
 const getStoredUser = () => {
@@ -29,7 +29,7 @@ export default function App() {
   const [posts, setPosts] = useState(() => { try { return JSON.parse(localStorage.getItem('community-posts')) || [] } catch { return [] } })
   const [user, setUser] = useState(getStoredUser)
   useEffect(() => { const f = () => setPath(location.pathname); addEventListener('popstate', f); return () => removeEventListener('popstate', f) }, [])
-  const refreshPosts = async () => { const response = await fetch(`${API_URL}/posts`); if (!response.ok) throw new Error('게시글을 불러오지 못했습니다.'); const data = await response.json(); setPosts(data); localStorage.setItem('community-posts', JSON.stringify(data)); return data }
+  const refreshPosts = async () => { const token = localStorage.getItem('community-session'); const response = await fetch(`${API_URL}/posts`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); if (!response.ok) throw new Error('게시글을 불러오지 못했습니다.'); const data = await response.json(); setPosts(data); localStorage.setItem('community-posts', JSON.stringify(data)); return data }
   useEffect(() => { refreshPosts().catch(() => {}) }, [])
   const go = (p) => { move(p); setPath(p); scrollTo(0, 0) }
   const saveLocal = next => { setPosts(next); localStorage.setItem('community-posts', JSON.stringify(next)) }
