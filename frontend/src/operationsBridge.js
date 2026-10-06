@@ -72,6 +72,19 @@ const showNotice = async () => {
     overlay.append(box); document.body.append(overlay)
   } catch {}
 }
-const connect = () => { connectUserActions(); connectAdmin(); showNotice() }
+const legalModal = (title, content) => {
+  document.querySelector('.legal-modal')?.remove()
+  const overlay = document.createElement('div'); overlay.className = 'legal-modal'; overlay.style.cssText = 'position:fixed;inset:0;z-index:100;background:#0008;display:grid;place-items:center;padding:20px'
+  const box = document.createElement('section'); box.style.cssText = 'width:min(760px,100%);max-height:80vh;overflow:auto;background:#fff;border-radius:14px;padding:28px;color:#1d2a44;position:relative;line-height:1.65'
+  box.innerHTML = `<button type="button" aria-label="닫기" style="position:absolute;right:16px;top:12px;border:0;background:none;font-size:24px">×</button><h1 style="margin-top:0">${title}</h1>${content}<p style="margin-top:24px;color:#667085">시행일: 2026년 10월 7일</p>`
+  const close = () => overlay.remove(); box.querySelector('button').onclick = close; overlay.onclick = (event) => { if (event.target === overlay) close() }; overlay.append(box); document.body.append(overlay)
+}
+const termsContent = `<h2>제1조 목적</h2><p>본 약관은 온마을 커뮤니티(이하 “서비스”)의 이용 조건과 회원 및 운영자의 권리·의무를 정합니다.</p><h2>제2조 회원가입과 계정</h2><p>회원은 정확한 정보를 제공해야 하며, 계정의 관리 책임은 회원에게 있습니다. 타인의 계정 사용, 허위 정보 등록, 운영 방해 행위는 금지됩니다.</p><h2>제3조 게시물과 이용자 준수사항</h2><p>회원은 법령을 위반하거나 타인의 권리를 침해하는 내용, 욕설·혐오·차별, 광고·스팸, 개인정보 무단 공개, 음란·불법 정보를 게시해서는 안 됩니다. 운영자는 신고 또는 검토 결과에 따라 게시물·댓글을 숨김 또는 삭제하고 이용을 제한할 수 있습니다.</p><h2>제4조 서비스 변경 및 책임</h2><p>서비스는 운영상 필요에 따라 기능을 변경하거나 중단할 수 있습니다. 회원이 작성한 콘텐츠의 책임은 작성자에게 있으며, 서비스는 법령상 책임이 있는 경우를 제외하고 회원 간 분쟁에 대해 책임을 지지 않습니다.</p><h2>제5조 문의 및 약관 변경</h2><p>서비스 관련 문의는 프로필의 문의하기 기능으로 접수할 수 있습니다. 약관 변경 시 서비스 내 공지 등 합리적인 방법으로 안내합니다.</p>`
+const privacyContent = `<h2>1. 수집하는 개인정보와 목적</h2><p>서비스는 회원가입·로그인, 게시글·댓글 작성, 문의·신고 처리 및 서비스 운영을 위해 이메일 주소, 닉네임(표시 이름), 인증 식별자, 작성 콘텐츠를 처리합니다.</p><h2>2. 보유 및 이용 기간</h2><p>개인정보는 회원 탈퇴 또는 처리 목적 달성 시까지 보유합니다. 다만 법령상 보존 의무가 있는 정보는 해당 기간 동안 보관합니다.</p><h2>3. 제3자 제공과 처리 위탁</h2><p>서비스는 법령상 근거 또는 별도 동의가 없는 한 개인정보를 제3자에게 제공하지 않습니다. 서비스 운영을 위해 Supabase(인증·데이터베이스)와 Vercel(웹 호스팅)을 이용할 수 있습니다.</p><h2>4. 이용자 권리</h2><p>이용자는 자신의 개인정보에 대한 열람·정정·삭제·처리정지를 요청할 수 있으며, 프로필의 문의하기 기능으로 요청할 수 있습니다.</p><h2>5. 안전성 및 쿠키</h2><p>서비스는 접근 통제 등 합리적인 보호조치를 적용합니다. 로그인 유지와 서비스 제공을 위해 브라우저 저장소를 사용할 수 있으며, 이용자는 브라우저 설정에서 이를 관리할 수 있습니다.</p><h2>6. 문의 및 변경</h2><p>개인정보 관련 문의는 서비스 내 문의하기 기능으로 접수할 수 있습니다. 처리방침이 변경되면 시행 전 서비스 내 공지로 알립니다.</p>`
+const connectLegal = () => {
+  const footer = document.querySelector('footer'); if (!footer || footer.dataset.legalLinks) return; footer.dataset.legalLinks = 'true'
+  const links = document.createElement('span'); links.style.cssText = 'display:inline-flex;gap:10px;margin-left:12px'; links.innerHTML = '<button type="button">이용약관</button><button type="button">개인정보처리방침</button>'; links.querySelectorAll('button').forEach((button) => { button.style.cssText = 'border:0;background:none;padding:0;color:inherit;text-decoration:underline;cursor:pointer'; button.onclick = () => legalModal(button.textContent, button.textContent === '이용약관' ? termsContent : privacyContent) }); footer.append(links)
+}
+const connect = () => { connectUserActions(); connectAdmin(); showNotice(); connectLegal() }
 new MutationObserver(connect).observe(document.documentElement, { childList: true, subtree: true })
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', connect); else connect()
