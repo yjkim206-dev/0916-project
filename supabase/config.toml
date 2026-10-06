@@ -1,0 +1,9 @@
+project_id = "aftnadzpsxzzujfyblsm"
+
+# Public routes are authorized inside the function: write operations validate the
+# caller's Supabase access token, while read and signup routes remain public.
+[functions.api]
+verify_jwt = false
+
+[functions.health]
+verify_jwt = false

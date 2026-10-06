@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import './comments.css'
 import AdminCommentsPanel from './AdminCommentsPanel'
+import './adminMembersBridge'
 
+// Supabase Edge Function is the production API. VITE_API_URL may override it
+// deliberately for local development.
 const API_URL = import.meta.env.VITE_API_URL || 'https://aftnadzpsxzzujfyblsm.supabase.co/functions/v1/api'
 const move = (p) => window.history.pushState({}, '', p)
 const defaultUser = { name: '', email: '', bio: '오늘도 온마을에서 좋은 하루 보내세요.' }
