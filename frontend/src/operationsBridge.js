@@ -44,7 +44,22 @@ const connectAdmin = () => {
   ;[['공지사항', 'notices'], ['문의하기', 'inquiries'], ['신고 관리', 'reports']].forEach(([label, kind]) => { const button = document.createElement('button'); button.textContent = label; button.onclick = () => adminPanel(kind); menu.append(button) })
   adminPanel('dashboard')
 }
-const showNotice = async () => { if (location.pathname !== '/' || document.body.dataset.noticeLoaded) return; document.body.dataset.noticeLoaded = 'true'; try { const notices = await request('/notices'); const notice = notices[0]; if (notice && localStorage.getItem('notice-dismissed') !== notice.id) { modal({ title: notice.title, fields: [], submit: async () => {} }); const form = document.querySelector('.operation-modal form'); form.querySelector('.primary-button').textContent = '확인'; form.onsubmit = (event) => { event.preventDefault(); localStorage.setItem('notice-dismissed', notice.id); form.closest('.operation-modal').remove() } } } catch {} }
+const showNotice = async () => {
+  if (location.pathname !== '/' || document.body.dataset.noticeLoaded) return
+  document.body.dataset.noticeLoaded = 'true'
+  try {
+    const notices = await request('/notices'); const notice = notices[0]
+    const storageKey = `notice-snooze:${notice?.id || ''}`
+    if (!notice || Number(localStorage.getItem(storageKey) || 0) > Date.now()) return
+    document.querySelector('.operation-modal')?.remove()
+    const overlay = document.createElement('div'); overlay.className = 'operation-modal'; overlay.style.cssText = 'position:fixed;inset:0;z-index:99;background:#0008;display:grid;place-items:center;padding:20px'
+    const box = document.createElement('section'); box.style.cssText = 'width:min(520px,100%);background:#fff;border-radius:14px;padding:24px;color:#1d2a44;position:relative'
+    box.innerHTML = `<button type="button" aria-label="닫기" style="position:absolute;right:16px;top:12px;border:0;background:none;font-size:24px">×</button><h2 style="margin:0 32px 12px 0">${notice.title}</h2><p style="white-space:pre-wrap;line-height:1.6">${notice.content}</p><label style="display:flex;gap:8px;align-items:center;margin-top:20px"><input type="checkbox"> 24시간 동안 보지 않기</label><div style="text-align:right;margin-top:16px"><button type="button" class="primary-button">닫기</button></div>`
+    const close = () => { if (box.querySelector('input').checked) localStorage.setItem(storageKey, String(Date.now() + 24 * 60 * 60 * 1000)); overlay.remove() }
+    box.querySelector('[aria-label="닫기"]').onclick = close; box.querySelector('.primary-button').onclick = close; overlay.onclick = (event) => { if (event.target === overlay) close() }
+    overlay.append(box); document.body.append(overlay)
+  } catch {}
+}
 const connect = () => { connectUserActions(); connectAdmin(); showNotice() }
 new MutationObserver(connect).observe(document.documentElement, { childList: true, subtree: true })
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', connect); else connect()
