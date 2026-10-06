@@ -110,8 +110,10 @@ Deno.serve(async req => {
       }
       return json({ error: 'Method not allowed.' }, 405)
     }
-    if (route === '/reports' && req.method === 'POST') {
+    if (route === '/reports') {
       const user = await authUser(req); if (!user) return json({ error: 'Login required.' }, 401)
+      if (req.method === 'GET') return json(await db(`reports?reporter_id=eq.${user.id}&select=id,target_type,target_id,reason,detail,status,created_at,handled_at&order=created_at.desc`))
+      if (req.method !== 'POST') return json({ error: 'Method not allowed.' }, 405)
       const data = await bodyOf(req); const targetType = String(data.targetType || ''); const targetId = String(data.targetId || ''); const reason = String(data.reason || '').trim(); const detail = String(data.detail || '').trim()
       if (!['post', 'comment'].includes(targetType) || !targetId || !reason) return json({ error: 'A report target and reason are required.' }, 400)
       const exists = targetType === 'post' ? await post(targetId) : (await db(`comments?id=eq.${encodeURIComponent(targetId)}&select=id`))?.[0]

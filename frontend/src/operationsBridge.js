@@ -22,8 +22,20 @@ const modal = ({ title, fields, submit }) => {
 }
 const addButton = (host, text, handler) => { if (!host || host.querySelector(`[data-operation="${text}"]`)) return; const button = document.createElement('button'); button.type = 'button'; button.dataset.operation = text; button.className = 'outline-button compact'; button.textContent = text; button.onclick = handler; host.append(button) }
 const report = (targetType, targetId) => modal({ title: '신고하기', fields: [{ name: 'reason', label: '신고 사유', placeholder: '예: 욕설, 스팸, 부적절한 내용' }, { name: 'detail', label: '상세 설명', multiline: true }], submit: (value) => request('/reports', { method: 'POST', body: JSON.stringify({ targetType, targetId, ...value }) }) })
+const renderMyOperations = async (profile) => {
+  if (profile.dataset.operationsLoaded || !token()) return
+  profile.dataset.operationsLoaded = 'true'
+  const panel = document.createElement('section'); panel.className = 'my-operations'; panel.style.cssText = 'margin-top:22px;padding:20px;background:#fff;border:1px solid #e5e9f1;border-radius:10px'
+  panel.innerHTML = '<h2 style="margin-top:0">내 문의 · 신고 내역</h2><p>불러오는 중입니다.</p>'; profile.after(panel)
+  try {
+    const [inquiries, reports] = await Promise.all([request('/inquiries'), request('/reports')])
+    const inquiryRows = inquiries.map(item => `<li><b>문의 · ${item.status}</b><br>${item.subject}<br><small>${item.content}${item.answer ? `<br><strong>관리자 답변:</strong> ${item.answer}` : ''}</small></li>`).join('') || '<li>문의 내역이 없습니다.</li>'
+    const reportRows = reports.map(item => `<li><b>신고 · ${item.status}</b><br>${item.target_type} / ${item.reason}<br><small>${item.detail || '상세 설명 없음'}</small></li>`).join('') || '<li>신고 내역이 없습니다.</li>'
+    panel.innerHTML = `<h2 style="margin-top:0">내 문의 · 신고 내역</h2><h3>문의하기</h3><ul>${inquiryRows}</ul><h3>신고하기</h3><ul>${reportRows}</ul>`
+  } catch (error) { panel.textContent = error.message || '내역을 불러오지 못했습니다.'; delete profile.dataset.operationsLoaded }
+}
 const connectUserActions = async () => {
-  const profile = document.querySelector('.profile-message'); if (profile) addButton(profile, '문의하기', () => modal({ title: '문의하기', fields: [{ name: 'subject', label: '제목' }, { name: 'content', label: '문의 내용', multiline: true }], submit: (value) => request('/inquiries', { method: 'POST', body: JSON.stringify(value) }) }))
+  const profile = document.querySelector('.profile-message'); if (profile) { addButton(profile, '문의하기', () => modal({ title: '문의하기', fields: [{ name: 'subject', label: '제목' }, { name: 'content', label: '문의 내용', multiline: true }], submit: (value) => request('/inquiries', { method: 'POST', body: JSON.stringify(value) }) })); renderMyOperations(profile) }
   const postId = location.pathname.match(/^\/post\/([^/]+)/)?.[1]; if (!postId) return
   addButton(document.querySelector('.detail-footer'), '신고하기', () => report('post', postId))
   try { const comments = await request(`/posts/${postId}/comments`); document.querySelectorAll('.comment-item').forEach((node, index) => addButton(node.querySelector('.comment-actions') || node.querySelector('.comment-content'), '신고하기', () => report('comment', comments[index]?.id))) } catch {}
