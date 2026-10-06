@@ -54,6 +54,18 @@ Deno.serve(async req => {
       const result = await response.json().catch(() => ({})); if (!response.ok) return json({ error: result.msg || result.message || 'Password update failed.' }, response.status)
       return json({ ok: true })
     }
+    if (route === '/profile' && req.method === 'PATCH') {
+      const token = tokenOf(req); const user = await authUser(req); const data = await bodyOf(req)
+      if (!user) return json({ error: 'Login required.' }, 401)
+      const name = String(data.name || '').trim(); const bio = String(data.bio || '').trim()
+      if (!name) return json({ error: 'Display name is required.' }, 400)
+      if (bio.length > 500) return json({ error: 'Bio must be 500 characters or fewer.' }, 400)
+      const result = await db(`profiles?id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ name, display_name: name, bio }) })
+      await db(`user_accounts?user_id=eq.${user.id}`, { method: 'PATCH', body: JSON.stringify({ display_name: name, updated_at: new Date().toISOString() }) })
+      const response = await fetch(`${base}/auth/v1/user`, { method: 'PUT', headers: { apikey: anonKey, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ data: { name, display_name: name, bio } }) })
+      if (!response.ok) return json({ error: 'Profile update failed.' }, response.status)
+      return json({ id: user.id, name: result[0]?.display_name || name, bio })
+    }
     if (route === '/posts' && req.method === 'GET') { const user = await authUser(req); return json(await Promise.all((await posts('hidden=eq.false&order=created_at.desc')).map((p: any) => publicPost(p, user?.id)))) }
     if (route === '/posts' && req.method === 'POST') {
       const user = await authUser(req); if (!user) return json({ error: '로그인이 필요합니다.' }, 401); const data = await bodyOf(req)

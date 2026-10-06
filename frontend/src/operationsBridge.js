@@ -10,6 +10,16 @@ const request = async (path, options = {}, admin = false) => {
   if (!response.ok) throw new Error(data.error || '요청을 처리하지 못했습니다.')
   return data
 }
+const previousSetItem = Storage.prototype.setItem
+Storage.prototype.setItem = function (key, value) {
+  previousSetItem.call(this, key, value)
+  if (this !== localStorage || key !== 'community-user' || !token()) return
+  try {
+    const profile = JSON.parse(value)
+    if (!profile?.name) return
+    request('/profile', { method: 'PATCH', body: JSON.stringify({ name: profile.name, bio: profile.bio || '' }) }).catch(() => {})
+  } catch {}
+}
 const modal = ({ title, fields, submit }) => {
   document.querySelector('.operation-modal')?.remove()
   const overlay = document.createElement('div'); overlay.className = 'operation-modal'; overlay.style.cssText = 'position:fixed;inset:0;z-index:99;background:#0008;display:grid;place-items:center;padding:20px'
