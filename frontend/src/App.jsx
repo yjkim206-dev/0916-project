@@ -3,6 +3,8 @@ import './App.css'
 import './comments.css'
 import AdminCommentsPanel from './AdminCommentsPanel'
 import './adminMembersBridge'
+import './sessionExpiry'
+import './operationsBridge'
 
 // Supabase Edge Function is the production API. VITE_API_URL may override it
 // deliberately for local development.

@@ -98,6 +98,67 @@ Deno.serve(async req => {
       const emails = new Map(users.map((user: any) => [user.id, user.email || '']))
       return json(items.map((item: any) => ({ id: item.id, name: item.display_name || item.name, role: item.role, createdAt: item.created_at, email: emails.get(item.id) || '' })))
     }
+    if (route === '/notices' && req.method === 'GET') return json(await db('notices?is_published=eq.true&select=id,title,content,created_at&order=created_at.desc&limit=1'))
+    if (route === '/inquiries') {
+      const user = await authUser(req); if (!user) return json({ error: 'Login required.' }, 401)
+      if (req.method === 'GET') return json(await db(`inquiries?user_id=eq.${user.id}&select=*&order=created_at.desc`))
+      if (req.method === 'POST') {
+        const data = await bodyOf(req); const subject = String(data.subject || '').trim(); const content = String(data.content || '').trim()
+        if (!subject || !content) return json({ error: 'Subject and content are required.' }, 400)
+        const result = await db('inquiries', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ user_id: user.id, subject, content }) })
+        return json(result[0], 201)
+      }
+      return json({ error: 'Method not allowed.' }, 405)
+    }
+    if (route === '/reports' && req.method === 'POST') {
+      const user = await authUser(req); if (!user) return json({ error: 'Login required.' }, 401)
+      const data = await bodyOf(req); const targetType = String(data.targetType || ''); const targetId = String(data.targetId || ''); const reason = String(data.reason || '').trim(); const detail = String(data.detail || '').trim()
+      if (!['post', 'comment'].includes(targetType) || !targetId || !reason) return json({ error: 'A report target and reason are required.' }, 400)
+      const exists = targetType === 'post' ? await post(targetId) : (await db(`comments?id=eq.${encodeURIComponent(targetId)}&select=id`))?.[0]
+      if (!exists) return json({ error: 'Report target not found.' }, 404)
+      const result = await db('reports', { method: 'POST', headers: { Prefer: 'return=representation,resolution=merge-duplicates' }, body: JSON.stringify({ reporter_id: user.id, target_type: targetType, target_id: targetId, reason, detail }) })
+      return json(result[0], 201)
+    }
+    if (route === '/admin/dashboard' && req.method === 'GET') {
+      if (!(await adminUser(req))) return json({ error: 'Administrator login is required.' }, 401)
+      const [members, allPosts, pendingInquiries, pendingReports, recentInquiries, recentReports] = await Promise.all([
+        db('profiles?select=id'), db('posts?select=id'), db('inquiries?status=eq.open&select=id'), db('reports?status=in.(open,reviewing)&select=id'),
+        db('inquiries?select=id,subject,status,created_at&order=created_at.desc&limit=5'), db('reports?select=id,target_type,reason,status,created_at&order=created_at.desc&limit=5'),
+      ])
+      return json({ memberCount: members.length, postCount: allPosts.length, pendingInquiries: pendingInquiries.length, pendingReports: pendingReports.length, recentInquiries, recentReports })
+    }
+    if (route === '/admin/notices') {
+      if (!(await adminUser(req))) return json({ error: 'Administrator login is required.' }, 401)
+      if (req.method === 'GET') return json(await db('notices?select=*&order=created_at.desc'))
+      if (req.method === 'POST') {
+        const user = await authUser(req); const data = await bodyOf(req); const title = String(data.title || '').trim(); const content = String(data.content || '').trim()
+        if (!title || !content) return json({ error: 'Title and content are required.' }, 400)
+        const result = await db('notices', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ title, content, is_published: data.isPublished !== false, author_id: user!.id }) })
+        return json(result[0], 201)
+      }
+    }
+    if (route === '/admin/inquiries' && req.method === 'GET') {
+      if (!(await adminUser(req))) return json({ error: 'Administrator login is required.' }, 401)
+      return json(await db('inquiries?select=*&order=created_at.desc'))
+    }
+    const adminInquiry = route.match(/^\/admin\/inquiries\/([^/]+)$/)
+    if (adminInquiry && req.method === 'PATCH') {
+      const admin = await adminUser(req); if (!admin) return json({ error: 'Administrator login is required.' }, 401)
+      const data = await bodyOf(req); const answer = String(data.answer || '').trim(); if (!answer) return json({ error: 'Answer is required.' }, 400)
+      const result = await db(`inquiries?id=eq.${encodeURIComponent(adminInquiry[1])}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ answer, status: 'answered', answered_by: admin.id, answered_at: new Date().toISOString(), updated_at: new Date().toISOString() }) })
+      return json(result[0])
+    }
+    if (route === '/admin/reports' && req.method === 'GET') {
+      if (!(await adminUser(req))) return json({ error: 'Administrator login is required.' }, 401)
+      return json(await db('reports?select=*&order=created_at.desc'))
+    }
+    const adminReport = route.match(/^\/admin\/reports\/([^/]+)$/)
+    if (adminReport && req.method === 'PATCH') {
+      const admin = await adminUser(req); if (!admin) return json({ error: 'Administrator login is required.' }, 401)
+      const data = await bodyOf(req); const status = String(data.status || ''); if (!['open', 'reviewing', 'resolved', 'dismissed'].includes(status)) return json({ error: 'Invalid report status.' }, 400)
+      const result = await db(`reports?id=eq.${encodeURIComponent(adminReport[1])}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ status, handled_by: admin.id, handled_at: new Date().toISOString(), updated_at: new Date().toISOString() }) })
+      return json(result[0])
+    }
     const adminPost = route.match(/^\/admin\/posts\/([^/]+)$/)
     if (adminPost && req.method === 'PATCH') { if (!(await adminUser(req))) return json({ error: '관리자 로그인이 필요합니다.' }, 401); const data = await bodyOf(req); if (!['hide', 'show'].includes(data.action)) return json({ error: '지원하지 않는 관리자 작업입니다.' }, 400); const result = await db(`posts?id=eq.${adminPost[1]}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ hidden: data.action === 'hide' }) }); return json(await publicPost(result[0])) }
     if (route === '/health') return json({ ok: true, service: 'supabase-api' })
