@@ -46,6 +46,14 @@ Deno.serve(async req => {
       if (!response.ok) return json({ error: result.msg || result.message || '인증에 실패했습니다.' }, response.status)
       const item = await profile(result.user.id); return json({ user: { id: result.user.id, name: item?.display_name || item?.name || name || email.split('@')[0], email, bio: '' }, token: result.access_token || result.session?.access_token || null }, signup ? 201 : 200)
     }
+    if (route === '/auth/password' && req.method === 'POST') {
+      const token = tokenOf(req); const user = await authUser(req); const data = await bodyOf(req); const password = String(data.password || '')
+      if (!user) return json({ error: 'Login required.' }, 401)
+      if (password.length < 8) return json({ error: 'Password must be at least 8 characters.' }, 400)
+      const response = await fetch(`${base}/auth/v1/user`, { method: 'PUT', headers: { apikey: anonKey, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) })
+      const result = await response.json().catch(() => ({})); if (!response.ok) return json({ error: result.msg || result.message || 'Password update failed.' }, response.status)
+      return json({ ok: true })
+    }
     if (route === '/posts' && req.method === 'GET') { const user = await authUser(req); return json(await Promise.all((await posts('hidden=eq.false&order=created_at.desc')).map((p: any) => publicPost(p, user?.id)))) }
     if (route === '/posts' && req.method === 'POST') {
       const user = await authUser(req); if (!user) return json({ error: '로그인이 필요합니다.' }, 401); const data = await bodyOf(req)
