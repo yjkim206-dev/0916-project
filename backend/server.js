@@ -14,7 +14,6 @@ const envPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '.env')
 const postsPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'posts.json')
 const databasePath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'onmaeul.sqlite')
 const db = new DatabaseSync(databasePath)
-db.exec('PRAGMA foreign_keys = ON')
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS admin_accounts (
@@ -73,24 +72,6 @@ db.exec(`
     FOREIGN KEY (author_id) REFERENCES user_accounts(id) ON DELETE CASCADE
   );
   CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id, created_at);
-  CREATE TABLE IF NOT EXISTS post_views (
-    post_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
-    created_at TEXT NOT NULL,
-    PRIMARY KEY (post_id, user_id),
-    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES user_accounts(id) ON DELETE CASCADE
-  );
-  CREATE TABLE IF NOT EXISTS post_reactions (
-    post_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
-    reaction TEXT NOT NULL CHECK (reaction IN ('like', 'dislike')),
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    PRIMARY KEY (post_id, user_id),
-    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES user_accounts(id) ON DELETE CASCADE
-  );
 `)
 
 const normalizeEmail = email => String(email || '').trim().toLowerCase()
@@ -118,7 +99,6 @@ const publicPost = post => ({
   likes: post.likes,
   dislikes: post.dislikes || 0,
   comments: post.comment_count ?? 0,
-  reaction: post.reaction || null,
   hidden: Boolean(post.hidden),
 })
 const tokenHash = token => crypto.createHash('sha256').update(token).digest('hex')
@@ -163,12 +143,6 @@ const commentQuery = `
   SELECT comments.*, user_accounts.name AS author, user_accounts.email AS author_email
   FROM comments JOIN user_accounts ON user_accounts.id = comments.author_id
 `
-const withReaction = (post, userId) => {
-  if (!userId) return post
-  const reaction = db.prepare('SELECT reaction FROM post_reactions WHERE post_id = ? AND user_id = ?').get(post.id, userId)
-  return { ...post, reaction: reaction?.reaction || null }
-}
-const findPost = (id, userId) => withReaction(db.prepare(`${postQuery} WHERE posts.id = ?`).get(id), userId)
 const publicComment = comment => ({
   id: comment.id,
   postId: comment.post_id,
@@ -261,10 +235,9 @@ app.post('/api/auth/login', (req, res) => {
   return res.json({ user: publicUser(user), token: createSession(user.id, 'user') })
 })
 
-app.get('/api/posts', (req, res) => {
-  const userId = getSession(req)?.role === 'user' ? getSession(req).subject_id : null
+app.get('/api/posts', (_req, res) => {
   const posts = db.prepare(`${postQuery} WHERE posts.hidden = 0 ORDER BY posts.created_at DESC`).all()
-  res.json(posts.map(post => publicPost(withReaction(post, userId))))
+  res.json(posts.map(publicPost))
 })
 
 app.post('/api/posts', (req, res) => {
@@ -275,7 +248,7 @@ app.post('/api/posts', (req, res) => {
   const now = new Date().toISOString()
   const result = db.prepare('INSERT INTO posts (category, title, content, author_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(category.trim() || '자유', title.trim(), content.trim(), user.id, now, now)
   const post = db.prepare(`${postQuery} WHERE posts.id = ?`).get(Number(result.lastInsertRowid))
-  return res.status(201).json(publicPost(withReaction(post, user.id)))
+  return res.status(201).json(publicPost(post))
 })
 
 app.patch('/api/posts/:id', (req, res) => {
@@ -283,40 +256,10 @@ app.patch('/api/posts/:id', (req, res) => {
   const post = db.prepare(`${postQuery} WHERE posts.id = ?`).get(id)
   if (!post) return res.status(404).json({ error: '게시글을 찾을 수 없습니다.' })
   if (['view', 'like', 'dislike'].includes(req.body?.action)) {
-    const user = requireUser(req, res)
-    if (!user) return
-    const action = req.body.action
-    if (action === 'view') {
-      const result = db.prepare('INSERT OR IGNORE INTO post_views (post_id, user_id, created_at) VALUES (?, ?, ?)').run(id, user.id, new Date().toISOString())
-      if (result.changes) db.prepare('UPDATE posts SET views = views + 1 WHERE id = ?').run(id)
-      return res.json(publicPost(findPost(id, user.id)))
-    }
-
-    const existing = db.prepare('SELECT reaction FROM post_reactions WHERE post_id = ? AND user_id = ?').get(id, user.id)
-    db.exec('BEGIN')
-    try {
-      if (existing?.reaction === action) {
-        db.prepare('DELETE FROM post_reactions WHERE post_id = ? AND user_id = ?').run(id, user.id)
-        const column = action === 'like' ? 'likes' : 'dislikes'
-        db.prepare(`UPDATE posts SET ${column} = MAX(${column} - 1, 0) WHERE id = ?`).run(id)
-      } else {
-        if (existing) {
-          const previousColumn = existing.reaction === 'like' ? 'likes' : 'dislikes'
-          db.prepare(`UPDATE posts SET ${previousColumn} = MAX(${previousColumn} - 1, 0) WHERE id = ?`).run(id)
-        }
-        db.prepare(`
-          INSERT INTO post_reactions (post_id, user_id, reaction, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
-          ON CONFLICT(post_id, user_id) DO UPDATE SET reaction = excluded.reaction, updated_at = excluded.updated_at
-        `).run(id, user.id, action, new Date().toISOString(), new Date().toISOString())
-        const column = action === 'like' ? 'likes' : 'dislikes'
-        db.prepare(`UPDATE posts SET ${column} = ${column} + 1 WHERE id = ?`).run(id)
-      }
-      db.exec('COMMIT')
-    } catch (error) {
-      db.exec('ROLLBACK')
-      throw error
-    }
-    return res.json(publicPost(findPost(id, user.id)))
+    if (req.body.action === 'view' && !requireUser(req, res)) return
+    const column = req.body.action === 'like' ? 'likes' : req.body.action === 'dislike' ? 'dislikes' : 'views'
+    db.prepare(`UPDATE posts SET ${column} = ${column} + 1 WHERE id = ?`).run(id)
+    return res.json(publicPost(db.prepare(`${postQuery} WHERE posts.id = ?`).get(id)))
   }
   const user = requireUser(req, res)
   if (!user) return

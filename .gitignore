@@ -5,6 +5,3 @@ dist/
 .env
 **/.env
 *.log
-
-.vercel
-.env*
